@@ -17,7 +17,6 @@ def load_and_process_data(data_folder="data"):
     df_weather = df_weather.groupby('date').agg({
         't': 'mean', 'wind_dir': 'mean', 'v_avg': 'mean', 'humidity': 'mean'
     }).reset_index()
-    print(f"✅ Погода загружена: {len(df_weather)} строк")
 
     supplies_path = os.path.join(data_folder, "supplies.csv")
     df_supplies = pd.read_csv(supplies_path)
