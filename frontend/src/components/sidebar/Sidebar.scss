@@ -26,15 +26,43 @@
   cursor: pointer;
   transition: 0.15s;
   margin-bottom: 8px;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+    &:hover {
+      background: #2e2e4c;
+    }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-left: 8px;
+
+    &.низкий-риск {
+      background-color: #57e857;
+    }
+
+    &.средний-риск {
+      background-color: #f8c459;
+    }
+
+    &.высокий-риск {
+      background-color: #f15151;
+    }
+  }
 
   &:hover {
     background: #3a3a56;
   }
-}
 
 .calendar-section {
   margin-top: auto;
   padding-top: 20px;
+}
 }
 
 

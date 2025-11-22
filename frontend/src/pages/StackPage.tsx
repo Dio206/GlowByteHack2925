@@ -8,12 +8,14 @@ const StackPage: React.FC = () => {
     const stack = stacks.find(s => s.id === Number(id));
 
     if (!stack) {
-        return <div className="stack-page">
-            <Link to="/" className="back-link">
-            ← Вернуться на главную
-        </Link>
-            <p>Такого штабеля не существует</p>
-        </div>;
+        return (
+            <div className="stack-page">
+                <Link to="/" className="back-link">
+                    ← Вернуться на главную
+                </Link>
+                <p>Такого штабеля не существует</p>
+            </div>
+        );
     }
 
     const riskClass = {
@@ -30,6 +32,10 @@ const StackPage: React.FC = () => {
 
             <h1>{stack.name}</h1>
             <p>{stack.description}</p>
+
+            <p>
+                Статус: <span className={`status-dot ${stack.status.replace(/\s+/g, '-').toLowerCase()}`} title={stack.status}></span> {stack.status}
+            </p>
 
             <table className="stack-table">
                 <tbody>

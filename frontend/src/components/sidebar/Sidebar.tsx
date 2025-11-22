@@ -1,12 +1,8 @@
 import Calendar from "../calendar/Calendar";
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { stacks } from '../../data/stacks';
 import './Sidebar.scss';
-
-const demoStacks = Array.from({ length: 30 }, (_, i) => ({
-    id: i + 1,
-    name: `Штабель ${i + 1}`,
-}));
 
 const Sidebar: React.FC = () => {
     const navigate = useNavigate();
@@ -14,13 +10,17 @@ const Sidebar: React.FC = () => {
     return (
         <div className="sidebar">
             <div className="stacks">
-                {demoStacks.map(stack => (
+                {stacks.map(stack => (
                     <div
                         key={stack.id}
                         className="stack-item"
                         onClick={() => navigate(`/stack/${stack.id}`)}
                     >
-                        {stack.name}
+                        <span>{stack.name}</span>
+                        <span
+                            className={`status-dot ${stack.status.replace(/\s+/g, '-').toLowerCase()}`}
+                            title={stack.status}
+                        ></span>
                     </div>
                 ))}
             </div>

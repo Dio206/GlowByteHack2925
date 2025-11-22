@@ -10,6 +10,7 @@ export interface Stack {
     riskDate: string;
     heatingRate: string;
     maxTemperature: string;
+    status: "Низкий риск" | "Средний риск" | "Высокий риск";
 }
 
 export const stacks: Stack[] = [
@@ -25,6 +26,7 @@ export const stacks: Stack[] = [
         riskDate: "2025-11-28",
         heatingRate: "5 °C/ч",
         maxTemperature: "120 °C",
+        status: "Низкий риск",
     },
     {
         id: 2,
@@ -38,6 +40,7 @@ export const stacks: Stack[] = [
         riskDate: "2025-12-05",
         heatingRate: "7 °C/ч",
         maxTemperature: "140 °C",
+        status: "Средний риск",
     },
     {
         id: 3,
@@ -51,5 +54,6 @@ export const stacks: Stack[] = [
         riskDate: "2025-12-15",
         heatingRate: "4 °C/ч",
         maxTemperature: "110 °C",
+        status: "Высокий риск",
     },
 ];
