@@ -1,0 +1,43 @@
+.sidebar {
+  width: 300px;
+  background-color: #1f1f2d;
+  color: white;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.stacks {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    width: 0;
+    background: transparent;
+  }
+}
+
+.stack-item {
+  padding: 14px 20px;
+  background: #2e2e42;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: 0.15s;
+  margin-bottom: 8px;
+
+  &:hover {
+    background: #3a3a56;
+  }
+}
+
+.calendar-section {
+  margin-top: auto;
+  padding-top: 20px;
+}
+
+
+
+
+

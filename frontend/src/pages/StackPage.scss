@@ -1,0 +1,87 @@
+.stack-page {
+  padding: 20px;
+  width: 100%;
+  min-height: 100vh;
+  background: #222232;
+  color: white;
+  box-sizing: border-box;
+
+  .back-link {
+    display: inline-block;
+    margin-bottom: 20px;
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    border: none;
+    color: white;
+    text-decoration: none;
+    transition: 0.2s;
+
+    &:hover {
+      color: #cacadd;
+    }
+  }
+
+  h1 {
+    margin-bottom: 20px;
+  }
+
+  p {
+    margin-bottom: 40px;
+  }
+
+  .stack-table {
+    width: 60%;
+    min-width: 400px;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 16px;
+    table-layout: fixed;
+
+    th, td {
+      border: none;
+      padding: 18px 16px;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      border-radius: 12px;
+      margin: 2px;
+    }
+
+    th {
+      font-size: 18px;
+    }
+
+    th:first-child,
+    td:first-child {
+      width: 66.666%;
+    }
+
+    th:last-child,
+    td:last-child {
+      width: 33.333%;
+    }
+
+
+
+    tr:hover {
+      background: #2e2e4c;
+    }
+
+    .risk-low {
+      color: green;
+      font-weight: bold;
+    }
+
+    .risk-medium {
+      color: orange;
+      font-weight: bold;
+    }
+
+    .risk-high {
+      color: red;
+      font-weight: bold;
+    }
+  }
+}
