@@ -215,20 +215,45 @@ async def get_stack_details(stack_id: int, date_str: str):
 @app.get("/list_all_cards", response_model=List[Dict[str, Any]])
 async def list_all_cards():
     """
-    ВОЗВРАЩАЕТ ПОЛНЫЙ СПИСОК ВСЕХ ШТАБЕЛЕЙ-ДНЕЙ с детализацией
-    для отображения в виде карточек (без фильтрации по риску).
+    ВОЗВРАЩАЕТ СПИСОК УНИКАЛЬНЫХ ШТАБЕЛЕЙ с агрегированными данными о максимальном риске.
     """
     if 'last_predictions' not in PREDICTIONS_CACHE:
         raise HTTPException(status_code=400, detail="Сначала выполните прогноз через /predict_data.")
 
-    df_predictions = PREDICTIONS_CACHE['last_predictions'].copy()
+    df = PREDICTIONS_CACHE['last_predictions'].copy()
     
-    if df_predictions.empty:
+    if df.empty:
         return []
 
-    # Форматирование данных для каждой карточки
-    card_list = df_predictions.apply(format_card_data, axis=1).tolist()
+    # 1. Рассчитываем общее количество дней в риске для каждого штабеля
+    df['is_risk'] = (df['probability'] > 0.40).astype(int)
+    risk_summary = df.groupby('stack_id').agg(
+        total_risk_days=('is_risk', 'sum'),
+    ).reset_index()
     
+    # 2. Находим индекс строки с максимальной вероятностью для каждого штабеля
+    idx_max_prob = df.groupby('stack_id')['probability'].idxmax()
+    df_max_risk = df.loc[idx_max_prob].reset_index(drop=True)
+    
+    # 3. Объединяем агрегированные данные (количество дней в риске)
+    df_final = pd.merge(df_max_risk, risk_summary, on='stack_id', how='left')
+
+    # 4. Форматируем результат для фронтенда (КЛЮЧЕВЫЕ ИЗМЕНЕНИЯ ЗДЕСЬ)
+    card_list = []
+    for index, row in df_final.iterrows():
+        probability = row['probability']
+        status = "В зоне высокого риска" if probability > 0.40 else "Норма"
+        
+        card_list.append({
+            "Номер штабеля": int(row['stack_id']),
+            "Тип угля": row['coal_type'],
+            "Текущий статус (Макс. риск)": status,
+            "Макс. вероятность риска (%)": f"{probability * 100:.2f}%",
+            "Дата самого высокого риска": row['date'].strftime('%Y-%m-%d'),
+            "Общее количество дней в зоне риска": int(row['total_risk_days']),
+            "Макс. температура (на дату макс. риска)": f"{row['temp_measured']:.2f}°C"
+        })
+        
     return card_list
 
 @app.post("/calculate_metrics", response_model=Dict[str, Any])
