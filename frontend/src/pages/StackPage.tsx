@@ -7,10 +7,25 @@ const riskColorMap: Record<string, string> = {
     "В зоне высокого риска": "#f15151",
 };
 
+
+
 const StackPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const [stack, setStack] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [riskDates, setRiskDates] = useState<string[]>([]);
+    const [showAll, setShowAll] = useState(false);
+
+    useEffect(() => {
+        if (!id) return;
+
+        fetch("http://localhost:8000/risk_calendar_dates")
+            .then(res => res.json())
+            .then((data) => {
+                const arr = data[id as string] || [];
+                setRiskDates(arr);
+            });
+    }, [id]);
 
     useEffect(() => {
         fetch("http://localhost:8000/list_all_cards")
@@ -68,6 +83,22 @@ const StackPage: React.FC = () => {
                 <div className="info-row">
                     <span className="info-title">Макс. температура:</span>
                     <span className="info-value">{stack["Макс. температура (на дату макс. риска)"]}</span>
+                </div>
+
+                <div className="dates-section">
+                    <span className="dates-title">Даты риска:</span>
+                    <div className="dates-content">
+                        <div className="date-list">
+                            {(showAll ? riskDates : riskDates.slice(0, 6)).map(d => (
+                                <div key={d} className="date-item">{d}</div>
+                            ))}
+                        </div>
+                        {riskDates.length > 6 && (
+                            <button className="show-more-btn" onClick={() => setShowAll(!showAll)}>
+                                {showAll ? "Скрыть" : `Показать ещё (${riskDates.length - 6})`}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
