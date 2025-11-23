@@ -28,6 +28,33 @@
 
   p {
     margin-bottom: 40px;
+    display: flex;
+    align-items: center;
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-left: 10px;
+      margin-right: 8px;
+
+      &.низкий-риск {
+        background-color: #57e857;
+      }
+
+      &.средний-риск {
+        background-color: #f8c459;
+      }
+
+      &.высокий-риск {
+        background-color: #f15151;
+      }
+    }
+
+    .status-text {
+      font-weight: bold;
+    }
   }
 
   .stack-table {
@@ -63,8 +90,6 @@
       width: 33.333%;
     }
 
-
-
     tr:hover {
       background: #2e2e4c;
     }
@@ -82,27 +107,6 @@
     .risk-high {
       color: red;
       font-weight: bold;
-    }
-  }
-
-  .status-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    display: inline-block;
-    margin-left: 10px;
-    margin-right: 8px;
-
-    &.низкий-риск {
-      background-color: #57e857;
-    }
-
-    &.средний-риск {
-      background-color: #f8c459;
-    }
-
-    &.высокий-риск {
-      background-color: #f15151;
     }
   }
 }

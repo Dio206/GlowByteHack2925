@@ -1,74 +1,59 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { stacks } from '../data/stacks';
+import type { FireData} from "../types/fire";
 import './StackPage.scss';
 
 const StackPage: React.FC = () => {
-    const { id } = useParams();
-    const stack = stacks.find(s => s.id === Number(id));
+    const { id } = useParams<{ id: string }>();
+    const [stackData, setStackData] = useState<FireData | null>(null);
+    const [loading, setLoading] = useState(true);
 
-    if (!stack) {
-        return (
-            <div className="stack-page">
-                <Link to="/" className="back-link">
-                    ← Вернуться на главную
-                </Link>
-                <p>Такого штабеля не существует</p>
-            </div>
-        );
-    }
+    const getStatus = (prob: number): FireData['status'] => {
+        if (prob >= 0.75) return "Высокий риск";
+        if (prob > 0.5) return "Средний риск";
+        return "Низкий риск";
+    };
 
-    const riskClass = {
-        Низкая: 'risk-low',
-        Средняя: 'risk-medium',
-        Высокая: 'risk-high',
-    }[stack.riskProbability];
+    useEffect(() => {
+        fetch('http://127.0.0.1:8000/predict_data')
+            .then(res => res.json())
+            .then((data: any[]) => {
+                const stack = data.find(item => String(item.stack_id) === id);
+                if (stack) {
+                    setStackData({
+                        stack_id: String(stack.stack_id),
+                        date_str: String(stack.date_str),
+                        probability: Number(stack.probability),
+                        status: getStatus(Number(stack.probability))
+                    });
+                } else setStackData(null);
+            })
+            .catch(err => console.error('Ошибка загрузки данных:', err))
+            .finally(() => setLoading(false));
+    }, [id]);
+
+    if (loading) return <p>Загрузка...</p>;
+    if (!stackData) return (
+        <div className="stack-page">
+            <Link to="/" className="back-link">← Вернуться на главную</Link>
+            <p>Такого штабеля не существует</p>
+        </div>
+    );
 
     return (
         <div className="stack-page">
-            <Link to="/" className="back-link">
-                ← Вернуться на главную
-            </Link>
-
-            <h1>{stack.name}</h1>
-            <p>{stack.description}</p>
-
+            <Link to="/" className="back-link">← Вернуться на главную</Link>
+            <h1>{stackData.stack_id}</h1>
             <p>
-                Статус: <span className={`status-dot ${stack.status.replace(/\s+/g, '-').toLowerCase()}`} title={stack.status}></span> {stack.status}
+                Статус:
+                <span
+                    className={`status-dot ${stackData.status.replace(/\s+/g, '-').toLowerCase()}`}
+                    title={stackData.status}
+                ></span>
+                {stackData.status}
             </p>
-
-            <table className="stack-table">
-                <tbody>
-                <tr>
-                    <th>Параметр</th>
-                    <th>Значение</th>
-                </tr>
-                <tr>
-                    <td>Возраст угля</td>
-                    <td>{stack.coalAge}</td>
-                </tr>
-                <tr>
-                    <td>Тип угля</td>
-                    <td>{stack.coalType}</td>
-                </tr>
-                <tr>
-                    <td>Вероятность риска</td>
-                    <td className={riskClass}>{stack.riskProbability}</td>
-                </tr>
-                <tr>
-                    <td>Дата риска</td>
-                    <td>{stack.riskDate}</td>
-                </tr>
-                <tr>
-                    <td>Скорость нагрева</td>
-                    <td>{stack.heatingRate}</td>
-                </tr>
-                <tr>
-                    <td>Максимальная температура</td>
-                    <td>{stack.maxTemperature}</td>
-                </tr>
-                </tbody>
-            </table>
+            <p>Вероятность возгорания: {stackData.probability}</p>
+            <p>Дата прогноза: {stackData.date_str}</p>
         </div>
     );
 };
