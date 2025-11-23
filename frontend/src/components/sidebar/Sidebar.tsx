@@ -58,7 +58,12 @@ export const Sidebar = () => {
                         key={stack["Номер штабеля"]}
                         className="stack-item"
                     >
-                        Штабель {stack["Номер штабеля"]}
+                        <span>Штабель {stack["Номер штабеля"]}</span>
+                        <span
+                            className={`status-dot ${
+                                stack["Текущий статус (Макс. риск)"].toLowerCase().replace(/\s/g, "-")
+                            }`}
+                        />
                     </Link>
                 ))}
             </div>

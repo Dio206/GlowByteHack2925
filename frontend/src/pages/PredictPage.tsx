@@ -9,6 +9,7 @@ export const PredictPage = () => {
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [success, setSuccess] = useState(false);
 
     const handleSubmit = async () => {
         if (!weatherFile || !suppliesFile || !temperatureFile) {
@@ -24,6 +25,7 @@ export const PredictPage = () => {
         setLoading(true);
         setError(null);
         setResult(null);
+        setSuccess(true);
 
         try {
             const res = await fetch("http://localhost:8000/predict_data", {
@@ -107,6 +109,12 @@ export const PredictPage = () => {
                     <pre className="result-json">
                 {JSON.stringify(result, null, 2)}
             </pre>
+                    <button
+                        className="reload-btn"
+                        onClick={() => window.location.href = "/"}
+                    >
+                        Запуск
+                    </button>
                 </div>
             )}
         </div>

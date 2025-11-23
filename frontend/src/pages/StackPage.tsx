@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import type { FireData} from "../types/fire";
 import './StackPage.scss';
+
+const riskColorMap: Record<string, string> = {
+    "Норма": "#57e857",
+    "В зоне высокого риска": "#f15151",
+};
 
 const StackPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -39,9 +43,8 @@ const StackPage: React.FC = () => {
                     <span className="info-title">Статус:</span>
                     <span className="info-value status">
                 <span
-                    className={`status-dot ${
-                        stack["Текущий статус (Макс. риск)"].toLowerCase()
-                    }`}
+                    className="status-dot"
+                    style={{ backgroundColor: riskColorMap[stack["Текущий статус (Макс. риск)"]] }}
                 />
                         {stack["Текущий статус (Макс. риск)"]}
             </span>

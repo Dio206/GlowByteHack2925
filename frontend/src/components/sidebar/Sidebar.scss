@@ -66,15 +66,11 @@
     display: inline-block;
     margin-left: 8px;
 
-    &.низкий-риск {
+    &.норма {
       background-color: #57e857;
     }
 
-    &.средний-риск {
-      background-color: #f8c459;
-    }
-
-    &.высокий-риск {
+    &.в-зоне-высокого-риска {
       background-color: #f15151;
     }
   }
