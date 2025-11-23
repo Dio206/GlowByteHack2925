@@ -33,9 +33,16 @@ def train():
     model.fit(X_train, y_train, cat_features=cat_features, eval_set=(X_test, y_test))
 
     print("\nРезультаты на тестовых данных:")
-    y_pred = model.predict(X_test)
+    
+    # --- НОВЫЕ СТРОКИ ДЛЯ ПОВЫШЕНИЯ RECALL ---
+    # 1. Получаем вероятности для класса 1 (риск)
+    y_proba = model.predict_proba(X_test)[:, 1]
+    # 2. Устанавливаем порог 0.45 для классификации
+    y_pred = (y_proba >= 0.45).astype(int)
+    # -----------------------------------------
+    
     print(classification_report(y_test, y_pred))
-    print(f"AUC-ROC Score: {roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]):.4f}")
+    print(f"AUC-ROC Score: {roc_auc_score(y_test, y_proba):.4f}")
 
     model_path = os.path.join(script_dir, "catboost_model.cbm")
     model.save_model(model_path)

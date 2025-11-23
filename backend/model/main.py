@@ -7,7 +7,8 @@ import os
 import io
 from datetime import datetime
 from typing import List, Dict, Any
-from fastapi.middleware.cors import CORSMiddleware
+# glob, confusion_matrix и связанные импорты удалены
+# Duplicated sklearn import fixed
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(script_dir, "catboost_model.cbm")
@@ -15,6 +16,7 @@ model_path = os.path.join(script_dir, "catboost_model.cbm")
 PREDICTIONS_CACHE = {} 
 
 def load_data_from_files(df_weather_raw, df_supplies_raw, df_temp_raw):
+    # Препроцессинг поставок
     df_supplies_raw['Start_Date'] = pd.to_datetime(df_supplies_raw['ВыгрузкаНаСклад']).dt.normalize()
     df_supplies_raw['End_Date'] = pd.to_datetime(df_supplies_raw['ПогрузкаНаСудно']).dt.normalize()
     
@@ -36,38 +38,50 @@ def load_data_from_files(df_weather_raw, df_supplies_raw, df_temp_raw):
             
     df_master = pd.DataFrame(stack_daily_rows)
     
+    # Препроцессинг погоды
     df_weather_raw['date'] = pd.to_datetime(df_weather_raw['date']).dt.normalize()
     df_weather_raw = df_weather_raw.groupby('date').agg({
         't': 'mean', 'wind_dir': 'mean', 'v_avg': 'mean', 'humidity': 'mean'
     }).reset_index()
     df_master = df_master.merge(df_weather_raw, on='date', how='left')
 
+    # Препроцессинг температуры
     df_temp_raw['date'] = pd.to_datetime(df_temp_raw['Дата акта']).dt.normalize()
     df_temp_raw = df_temp_raw.rename(columns={'Штабель': 'stack_id', 'Максимальная температура': 'temp_measured'})
     df_temp_raw = df_temp_raw[['stack_id', 'date', 'temp_measured']].drop_duplicates(subset=['stack_id', 'date'], keep='first')
     
     df_master = df_master.merge(df_temp_raw, on=['stack_id', 'date'], how='left')
     
+    # Инженерия признаков температуры
     df_master['temp_measured'] = df_master.groupby('stack_id')['temp_measured'].ffill()
     df_master['temp_measured'] = df_master['temp_measured'].fillna(df_master['t'])
 
     df_master['temp_lag_1d'] = df_master.groupby('stack_id')['temp_measured'].shift(1)
-    df_master['temp_ror'] = df_master['temp_measured'] - df_master['temp_lag_1d'] # RoR
+    df_master['temp_ror'] = df_master['temp_measured'] - df_master['temp_lag_1d'] # RoR (Rate of Rise)
     df_master['temp_ror'] = df_master['temp_ror'].fillna(0)
     
     df_master = df_master.dropna(subset=['t']).reset_index(drop=True)
+
+    df_master['avg_temp_3d'] = df_master.groupby('stack_id')['temp_measured'].transform(lambda x: x.rolling(window=3, min_periods=1).mean())
+    df_master['avg_temp_7d'] = df_master.groupby('stack_id')['temp_measured'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
+    df_master['avg_ror_7d'] = df_master.groupby('stack_id')['temp_ror'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
     
     X = df_master.drop(columns=['date', 'stack_id', 'temp_lag_1d'])
 
     return df_master, X
 
+# Настройка FastAPI
 app = FastAPI(
     title="Coal Fire Predictor API",
     description="API для прогнозирования самовозгорания угля.",
     version="1.0"
 )
 
-origins = ["*"]
+model = CatBoostClassifier()
+
+origins = [
+    "http://localhost:5173",
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -77,18 +91,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-model = CatBoostClassifier()
-
-origins = [""]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=[""],
-    allow_headers=["*"],
-)
-
+# Загрузка модели при старте
 try:
     if os.path.exists(model_path):
         model.load_model(model_path)
@@ -98,6 +101,12 @@ try:
 except Exception as e:
     raise RuntimeError(f"Ошибка загрузки CatBoost: {e}")
 
+# --- API Endpoints ---
+
+@app.get("/")
+def read_root():
+    return {"status": "Server is running", "model_loaded": os.path.exists(model_path)}
+
 @app.post("/predict_data", response_model=List[Dict[str, Any]])
 async def predict_full_dataset(
     weather_file: UploadFile = File(..., alias="weather_data"),
@@ -105,21 +114,26 @@ async def predict_full_dataset(
     temperature_file: UploadFile = File(..., alias="temperature_data")
 ):
     """
-    Загружает 3 файла, делает препроцессинг, прогноз на каждый день 
-    и сохраняет результат в кэш. Возвращает данные для календаря.
+    Загружает 3 файла, делает препроцессинг и прогноз на каждый день. 
+    Возвращает данные о днях с вероятностью риска > 0.4.
     """
     try:
+        # Чтение загруженных файлов
         df_weather = pd.read_csv(io.StringIO((await weather_file.read()).decode('utf-8')))
         df_supplies = pd.read_csv(io.StringIO((await supplies_file.read()).decode('utf-8')))
         df_temp = pd.read_csv(io.StringIO((await temperature_file.read()).decode('utf-8')))
         
+        # Препроцессинг и формирование признаков
         df_master, X = load_data_from_files(df_weather, df_supplies, df_temp)
 
+        # Прогноз
         predictions_proba = model.predict_proba(X)
         df_master['probability'] = predictions_proba[:, 1]
         
+        # Кэширование для последующего расчета метрик
         PREDICTIONS_CACHE['last_predictions'] = df_master.copy()
         
+        # Фильтрация по порогу 0.4 (для фронтенда)
         df_output = df_master[df_master['probability'] > 0.4] 
         
         df_output['date_str'] = df_output['date'].dt.strftime('%Y-%m-%d')
@@ -134,7 +148,8 @@ async def predict_full_dataset(
 @app.post("/calculate_metrics", response_model=Dict[str, Any])
 async def calculate_metrics(fires_file: UploadFile = File(..., alias="fires_actual_data")):
     """
-    Загружает файл с фактическими пожарами (fires.csv) и сравнивает с прогнозом.
+    Загружает файл с фактическими пожарами (fires.csv) и сравнивает с прогнозом 
+    из последнего запроса /predict_data.
     """
     if 'last_predictions' not in PREDICTIONS_CACHE:
         raise HTTPException(status_code=400, detail="Сначала выполните прогноз через /predict_data.")
@@ -147,20 +162,22 @@ async def calculate_metrics(fires_file: UploadFile = File(..., alias="fires_actu
         
         df_predictions['target_fire'] = 0
         
+        # Определение истинных положительных периодов (3 дня до пожара)
         for _, row in df_fires_actual.iterrows():
             stack = row['Штабель']
             f_date = row['fire_date']
             
             mask = (
                 (df_predictions['stack_id'] == stack) & 
-                (df_predictions['date'] >= (f_date - pd.Timedelta(days=7))) &
-                (df_predictions['date'] <= f_date)
+                (df_predictions['date'] >= (f_date - pd.Timedelta(days=3))) &
+                (df_predictions['date'] <= (f_date - pd.Timedelta(days=1))) 
             )
             df_predictions.loc[mask, 'target_fire'] = 1
 
         df_merged = df_predictions[df_predictions['target_fire'].notnull()]
         
-        df_merged['prediction_class'] = (df_merged['probability'] > 0.5).astype(int)
+        # Применение порога 0.40 для бинарной классификации
+        df_merged['prediction_class'] = (df_merged['probability'] > 0.40).astype(int)
         
         report = classification_report(df_merged['target_fire'], df_merged['prediction_class'], output_dict=True, zero_division=0)
         auc_roc = roc_auc_score(df_merged['target_fire'], df_merged['probability'])
@@ -180,7 +197,3 @@ async def calculate_metrics(fires_file: UploadFile = File(..., alias="fires_actu
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Ошибка расчета метрик: {e}")
-
-@app.get("/")
-def read_root():
-    return {"status": "Server is running", "model_loaded": os.path.exists(model_path)}

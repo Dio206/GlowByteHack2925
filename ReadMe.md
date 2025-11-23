@@ -14,12 +14,13 @@
 python -m venv myenv
 myenv\Scripts\activate
 
-2. Перейдите в папку `backend/model` и установите все необходимые библиотеки:
+2. Перейдите в папку `backend` и установите все необходимые библиотеки:
 
-cd backend/model
+cd backend
 pip install -r requirements.txt
 
 
-2. Запустите сервер
+2. Перейдите в папку model и запустите сервер
+cd model
 py -m uvicorn main:app --reload
 

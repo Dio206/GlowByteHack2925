@@ -73,8 +73,8 @@ def load_and_process_data(data_folder="data"):
         
         mask = (
             (df_master['stack_id'] == stack) & 
-            (df_master['date'] >= (f_date - pd.Timedelta(days=7))) &
-            (df_master['date'] <= f_date)
+            (df_master['date'] >= (f_date - pd.Timedelta(days=3))) &
+            (df_master['date'] <= (f_date - pd.Timedelta(days=1))) 
         )
         df_master.loc[mask, 'target_fire'] = 1
 
