@@ -7,6 +7,7 @@ import os
 import io
 from datetime import datetime
 from typing import List, Dict, Any
+from fastapi.middleware.cors import CORSMiddleware
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(script_dir, "catboost_model.cbm")
@@ -77,6 +78,17 @@ app.add_middleware(
 )
 
 model = CatBoostClassifier()
+
+origins = [""]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=[""],
+    allow_headers=["*"],
+)
+
 try:
     if os.path.exists(model_path):
         model.load_model(model_path)
