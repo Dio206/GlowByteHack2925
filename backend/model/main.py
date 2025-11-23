@@ -9,22 +9,27 @@ import io
 from datetime import datetime
 from typing import List, Dict, Any
 
+# =========================================================================================
+# Настройка и инициализация
+# =========================================================================================
 script_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(script_dir, "catboost_model.cbm")
 
+# Кэш для хранения результатов последнего прогноза
 PREDICTIONS_CACHE = {} 
 
+# =========================================================================================
+# Вспомогательные функции
+# =========================================================================================
+
 def format_card_data(row: pd.Series) -> Dict[str, Any]:
-    """Форматирует строку данных Pandas в словарь с нужными полями и статусом."""
     probability = row['probability']
     status = "В зоне высокого риска" if probability > 0.40 else "Норма"
     
     return {
-        # Ключевые поля
         "Номер штабеля": int(row['stack_id']),
         "Дата риска": row['date'].strftime('%Y-%m-%d'),
         "Статус": status,
-        # Детальные поля
         "Возраст угля (дней)": int(row['coal_age_days']),
         "Тип угля": row['coal_type'],
         "Вероятность риска (%)": f"{probability * 100:.2f}%",
@@ -32,7 +37,7 @@ def format_card_data(row: pd.Series) -> Dict[str, Any]:
         "Скорость нагрева (RoR, °C/день)": f"{row['temp_ror']:.2f}",
         "Макс. температура (°C)": f"{row['temp_measured']:.2f}",
         "Координата X": float(row['coord_x']), 
-        "Координата Y": float(row['coord_y'])  
+        "Координата Y": float(row['coord_y']) 
     }
 
 def load_data_from_files(df_weather_raw, df_supplies_raw, df_temp_raw):
@@ -42,16 +47,12 @@ def load_data_from_files(df_weather_raw, df_supplies_raw, df_temp_raw):
     df_supplies_raw['Start_Date'] = pd.to_datetime(df_supplies_raw['ВыгрузкаНаСклад']).dt.normalize()
     df_supplies_raw['End_Date'] = pd.to_datetime(df_supplies_raw['ПогрузкаНаСудно']).dt.normalize()
     
-    # 1. ДИНАМИЧЕСКАЯ ГЕНЕРАЦИЯ СТАБИЛЬНЫХ КООРДИНАТ
-    unique_stacks = df_supplies_raw['Штабель'].unique()
     stack_coords = {}
     
-    # Диапазон координат 
     LAT_MIN, LAT_MAX = 44.7, 44.8 
     LON_MIN, LON_MAX = 37.7, 37.8 
     
-    for stack_id in unique_stacks:
-        # FIX: Явное преобразование в int
+    for stack_id in df_supplies_raw['Штабель'].unique():
         random.seed(int(stack_id) * 12345) 
         stack_coords[stack_id] = {
             'stack_id': stack_id,
@@ -60,7 +61,6 @@ def load_data_from_files(df_weather_raw, df_supplies_raw, df_temp_raw):
         }
     df_coords = pd.DataFrame(list(stack_coords.values())) 
     
-    # 2. Создаем ежедневные записи
     stack_daily_rows = []
     for _, row in df_supplies_raw.iterrows():
         end_date = row['End_Date'] if pd.notnull(row['End_Date']) else pd.to_datetime("2021-12-31")
@@ -83,7 +83,6 @@ def load_data_from_files(df_weather_raw, df_supplies_raw, df_temp_raw):
     df_master = df_master.drop_duplicates(subset=['stack_id', 'date'], keep='first')
     
     df_master = pd.merge(df_master, df_coords, on='stack_id', how='left')
-
 
     df_weather_raw['date'] = pd.to_datetime(df_weather_raw['date']).dt.normalize()
     df_weather_raw = df_weather_raw.groupby('date').agg({
@@ -110,11 +109,48 @@ def load_data_from_files(df_weather_raw, df_supplies_raw, df_temp_raw):
     df_master['avg_temp_7d'] = df_master.groupby('stack_id')['temp_measured'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
     df_master['avg_ror_7d'] = df_master.groupby('stack_id')['temp_ror'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
     
+    df_master['coal_type'] = df_master['coal_type'].astype('category').cat.codes
+    
     X = df_master.drop(columns=['date', 'stack_id', 'temp_lag_1d', 'coord_x', 'coord_y'])
     
     return df_master, X
 
-# Настройка FastAPI
+def calculate_temporal_accuracy(df_predictions: pd.DataFrame, df_fires_actual: pd.DataFrame) -> float:
+    """
+    Считает процент фактических пожаров, для которых был сделан прогноз 
+    в окне [3 дня ДО пожара, 1 день ДО пожара].
+    """
+    
+    df_risk_predictions = df_predictions[df_predictions['probability'] > 0.40].copy()
+    
+    total_fires = len(df_fires_actual)
+    successful_predictions = 0
+    
+    if total_fires == 0:
+        return 0.0
+
+    for _, fire_row in df_fires_actual.iterrows():
+        stack_id = fire_row['Штабель']
+        fire_date = fire_row['fire_date']
+        
+        start_window = fire_date - pd.Timedelta(days=3)
+        end_window = fire_date - pd.Timedelta(days=1)
+        
+        match = df_risk_predictions[
+            (df_risk_predictions['stack_id'] == stack_id) & 
+            (df_risk_predictions['date'] >= start_window) &
+            (df_risk_predictions['date'] <= end_window)
+        ]
+        
+        if not match.empty:
+            successful_predictions += 1
+            
+    return successful_predictions / total_fires
+
+# =========================================================================================
+# Настройка FastAPI и CORS
+# =========================================================================================
+
 app = FastAPI(
     title="Coal Fire Predictor API",
     description="API для прогнозирования самовозгорания угля.",
@@ -138,17 +174,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Загрузка модели при старте
 try:
     if os.path.exists(model_path):
         model.load_model(model_path)
-        print("Модель CatBoost успешно загружена.")
     else:
         print("Файл модели не найден. Запустите train_model.py.")
 except Exception as e:
     raise RuntimeError(f"Ошибка загрузки CatBoost: {e}")
 
-# Энды
+# =========================================================================================
+# Эндпоинты API
+# =========================================================================================
 
 @app.get("/")
 def read_root():
@@ -165,23 +201,18 @@ async def predict_full_dataset(
     Возвращает данные о днях с вероятностью риска > 0.4.
     """
     try:
-        # Чтение загруженных файлов
         df_weather = pd.read_csv(io.StringIO((await weather_file.read()).decode('utf-8')))
         df_supplies = pd.read_csv(io.StringIO((await supplies_file.read()).decode('utf-8')))
         df_temp = pd.read_csv(io.StringIO((await temperature_file.read()).decode('utf-8')))
         
-        # Препроцессинг и формирование признаков
         df_master, X = load_data_from_files(df_weather, df_supplies, df_temp)
 
-        # Прогноз
         predictions_proba = model.predict_proba(X)
         df_master['probability'] = predictions_proba[:, 1]
         
-        # Кэширование для последующего расчета метрик
         PREDICTIONS_CACHE['last_predictions'] = df_master.copy()
         
-        # Фильтрация по порогу 0.4 (для фронтенда)
-        df_output = df_master[df_master['probability'] > 0.4] 
+        df_output = df_master[df_master['probability'] > 0.4].copy() 
         
         df_output['date_str'] = df_output['date'].dt.strftime('%Y-%m-%d')
         
@@ -203,10 +234,8 @@ async def get_stack_details(stack_id: int, date_str: str):
     df = PREDICTIONS_CACHE['last_predictions']
     
     try:
-        # Конвертация типов для поиска
         date_dt = pd.to_datetime(date_str).normalize()
         
-        # Фильтрация по номеру штабеля и дате
         result = df[
             (df['stack_id'] == stack_id) & 
             (df['date'] == date_dt)
@@ -215,10 +244,8 @@ async def get_stack_details(stack_id: int, date_str: str):
         if result.empty:
             raise HTTPException(status_code=404, detail=f"Данные для штабеля {stack_id} на дату {date_str} не найдены.")
             
-        # Извлекаем данные
         data = result.iloc[0]
         
-        # Используем функцию format_card_data для формирования ответа
         card_data = format_card_data(data)
         
         return card_data
@@ -257,7 +284,6 @@ async def list_all_cards():
         probability = row['probability']
         status = "В зоне высокого риска" if probability > 0.40 else "Норма"
         
-        # <-- ИСПРАВЛЕННЫЙ БЛОК: Удален невидимый символ после coord_y
         card_list.append({
             "Номер штабеля": int(row['stack_id']),
             "Тип угля": row['coal_type'],
@@ -273,6 +299,30 @@ async def list_all_cards():
         })
         
     return card_list
+
+@app.get("/risk_calendar_dates", response_model=Dict[str, List[str]])
+async def get_risk_calendar_dates():
+    """
+    Возвращает список всех дат, для которых хотя бы один штабель имеет 
+    вероятность риска > 0.40.
+    
+    Формат ответа: {"stack_id": ["YYYY-MM-DD", "YYYY-MM-DD", ...]}
+    """
+    if 'last_predictions' not in PREDICTIONS_CACHE:
+        raise HTTPException(status_code=400, detail="Сначала выполните прогноз через /predict_data.")
+    
+    df = PREDICTIONS_CACHE['last_predictions'].copy()
+    df_risk = df[df['probability'] > 0.40].copy()
+    
+    if df_risk.empty:
+        return {}
+        
+    df_risk['date_str'] = df_risk['date'].dt.strftime('%Y-%m-%d')
+    
+    risk_dates = df_risk.groupby('stack_id')['date_str'].apply(list).to_dict()
+    
+    # Преобразуем ключи stack_id (int) в str для соответствия JSON
+    return {str(k): v for k, v in risk_dates.items()}
 
 @app.post("/calculate_metrics", response_model=Dict[str, Any])
 async def calculate_metrics(fires_file: UploadFile = File(..., alias="fires_actual_data")):
@@ -308,6 +358,9 @@ async def calculate_metrics(fires_file: UploadFile = File(..., alias="fires_actu
         # Применение порога 0.40 для бинарной классификации
         df_merged['prediction_class'] = (df_merged['probability'] > 0.40).astype(int)
         
+        # Расчет ключевой метрики
+        temporal_accuracy = calculate_temporal_accuracy(df_predictions, df_fires_actual)
+        
         report = classification_report(df_merged['target_fire'], df_merged['prediction_class'], output_dict=True, zero_division=0)
         auc_roc = roc_auc_score(df_merged['target_fire'], df_merged['probability'])
         
@@ -317,12 +370,13 @@ async def calculate_metrics(fires_file: UploadFile = File(..., alias="fires_actu
             "precision_risk": round(report['1']['precision'], 4),
             "recall_risk": round(report['1']['recall'], 4),
             "auc_roc": round(auc_roc, 4),
-            "total_risk_periods": int(df_merged['target_fire'].sum())
+            "total_risk_periods": int(df_merged['target_fire'].sum()),
+            
+            "temporal_accuracy_70_percent": round(temporal_accuracy, 4) 
         }
         
         return metrics
-    
-
+        
     except Exception as e:
         import traceback
         traceback.print_exc()
