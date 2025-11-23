@@ -9,22 +9,15 @@ import io
 from datetime import datetime
 from typing import List, Dict, Any
 
-# =========================================================================================
-# Настройка и инициализация
-# =========================================================================================
 script_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(script_dir, "catboost_model.cbm")
 
-# Кэш для хранения результатов последнего прогноза
 PREDICTIONS_CACHE = {} 
 
-# =========================================================================================
-# Вспомогательные функции
-# =========================================================================================
 
 def format_card_data(row: pd.Series) -> Dict[str, Any]:
     probability = row['probability']
-    status = "В зоне высокого риска" if probability > 0.40 else "Норма"
+    status = "В зоне высокого риска" if probability > 0.60 else "Норма"
     
     return {
         "Номер штабеля": int(row['stack_id']),
@@ -121,7 +114,7 @@ def calculate_temporal_accuracy(df_predictions: pd.DataFrame, df_fires_actual: p
     в окне [3 дня ДО пожара, 1 день ДО пожара].
     """
     
-    df_risk_predictions = df_predictions[df_predictions['probability'] > 0.40].copy()
+    df_risk_predictions = df_predictions[df_predictions['probability'] > 0.60].copy()
     
     total_fires = len(df_fires_actual)
     successful_predictions = 0
@@ -147,9 +140,6 @@ def calculate_temporal_accuracy(df_predictions: pd.DataFrame, df_fires_actual: p
             
     return successful_predictions / total_fires
 
-# =========================================================================================
-# Настройка FastAPI и CORS
-# =========================================================================================
 
 app = FastAPI(
     title="Coal Fire Predictor API",
@@ -182,9 +172,6 @@ try:
 except Exception as e:
     raise RuntimeError(f"Ошибка загрузки CatBoost: {e}")
 
-# =========================================================================================
-# Эндпоинты API
-# =========================================================================================
 
 @app.get("/")
 def read_root():
@@ -268,7 +255,7 @@ async def list_all_cards():
     if df.empty:
         return []
 
-    df['is_risk'] = (df['probability'] > 0.40).astype(int)
+    df['is_risk'] = (df['probability'] > 0.60).astype(int)
     risk_summary = df.groupby('stack_id').agg(
         total_risk_days=('is_risk', 'sum'),
         total_days=('date', 'size') 
@@ -282,7 +269,7 @@ async def list_all_cards():
     card_list = []
     for index, row in df_final.iterrows():
         probability = row['probability']
-        status = "В зоне высокого риска" if probability > 0.40 else "Норма"
+        status = "В зоне высокого риска" if probability > 0.60 else "Норма"
         
         card_list.append({
             "Номер штабеля": int(row['stack_id']),
@@ -304,7 +291,7 @@ async def list_all_cards():
 async def get_risk_calendar_dates():
     """
     Возвращает список всех дат, для которых хотя бы один штабель имеет 
-    вероятность риска > 0.40.
+    вероятность риска > 0.60.
     
     Формат ответа: {"stack_id": ["YYYY-MM-DD", "YYYY-MM-DD", ...]}
     """
@@ -312,7 +299,7 @@ async def get_risk_calendar_dates():
         raise HTTPException(status_code=400, detail="Сначала выполните прогноз через /predict_data.")
     
     df = PREDICTIONS_CACHE['last_predictions'].copy()
-    df_risk = df[df['probability'] > 0.40].copy()
+    df_risk = df[df['probability'] > 0.60].copy()
     
     if df_risk.empty:
         return {}
@@ -355,8 +342,8 @@ async def calculate_metrics(fires_file: UploadFile = File(..., alias="fires_actu
 
         df_merged = df_predictions[df_predictions['target_fire'].notnull()]
         
-        # Применение порога 0.40 для бинарной классификации
-        df_merged['prediction_class'] = (df_merged['probability'] > 0.40).astype(int)
+        # Применение порога 0.60 для бинарной классификации
+        df_merged['prediction_class'] = (df_merged['probability'] > 0.60).astype(int)
         
         # Расчет ключевой метрики
         temporal_accuracy = calculate_temporal_accuracy(df_predictions, df_fires_actual)
