@@ -10,7 +10,11 @@
 
 Инструкция по запуску Бэка
 
-1. Перейдите в папку `backend/model` и установите все необходимые библиотеки:
+1. Создайте окружение и запустите его
+python -m venv myenv
+myenv\Scripts\activate
+
+2. Перейдите в папку `backend/model` и установите все необходимые библиотеки:
 
 cd backend/model
 pip install -r requirements.txt
