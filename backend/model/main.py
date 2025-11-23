@@ -1,3 +1,4 @@
+import random
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from catboost import CatBoostClassifier
@@ -7,8 +8,6 @@ import os
 import io
 from datetime import datetime
 from typing import List, Dict, Any
-# glob, confusion_matrix и связанные импорты удалены
-# Duplicated sklearn import fixed
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(script_dir, "catboost_model.cbm")
@@ -29,25 +28,50 @@ def format_card_data(row: pd.Series) -> Dict[str, Any]:
         "Возраст угля (дней)": int(row['coal_age_days']),
         "Тип угля": row['coal_type'],
         "Вероятность риска (%)": f"{probability * 100:.2f}%",
+        "Вероятность риска (RAW)": float(probability), 
         "Скорость нагрева (RoR, °C/день)": f"{row['temp_ror']:.2f}",
-        "Макс. температура (°C)": f"{row['temp_measured']:.2f}"
+        "Макс. температура (°C)": f"{row['temp_measured']:.2f}",
+        "Координата X": float(row['coord_x']), 
+        "Координата Y": float(row['coord_y'])  
     }
 
 def load_data_from_files(df_weather_raw, df_supplies_raw, df_temp_raw):
-    # Препроцессинг поставок
+    """
+    Препроцессинг, динамическая генерация координат и инженерия признаков.
+    """
     df_supplies_raw['Start_Date'] = pd.to_datetime(df_supplies_raw['ВыгрузкаНаСклад']).dt.normalize()
     df_supplies_raw['End_Date'] = pd.to_datetime(df_supplies_raw['ПогрузкаНаСудно']).dt.normalize()
     
+    # 1. ДИНАМИЧЕСКАЯ ГЕНЕРАЦИЯ СТАБИЛЬНЫХ КООРДИНАТ
+    unique_stacks = df_supplies_raw['Штабель'].unique()
+    stack_coords = {}
+    
+    # Диапазон координат 
+    LAT_MIN, LAT_MAX = 44.7, 44.8 
+    LON_MIN, LON_MAX = 37.7, 37.8 
+    
+    for stack_id in unique_stacks:
+        # FIX: Явное преобразование в int
+        random.seed(int(stack_id) * 12345) 
+        stack_coords[stack_id] = {
+            'stack_id': stack_id,
+            'coord_x': random.uniform(LAT_MIN, LAT_MAX), 
+            'coord_y': random.uniform(LON_MIN, LON_MAX)  
+        }
+    df_coords = pd.DataFrame(list(stack_coords.values())) 
+    
+    # 2. Создаем ежедневные записи
     stack_daily_rows = []
     for _, row in df_supplies_raw.iterrows():
         end_date = row['End_Date'] if pd.notnull(row['End_Date']) else pd.to_datetime("2021-12-31")
         start_date = row['Start_Date']
+        stack_id = row['Штабель']
         
         date_range = pd.date_range(start=start_date, end=end_date, freq='D')
         
         for date in date_range:
             stack_daily_rows.append({
-                'stack_id': row['Штабель'],
+                'stack_id': stack_id,
                 'date': date.normalize(),
                 'coal_type': row.get('Наим. ЕТСНГ', 'Unknown'),
                 'initial_amount': row.get('На склад, тн', 0),
@@ -56,26 +80,28 @@ def load_data_from_files(df_weather_raw, df_supplies_raw, df_temp_raw):
             
     df_master = pd.DataFrame(stack_daily_rows)
     
-    # Препроцессинг погоды
+    df_master = df_master.drop_duplicates(subset=['stack_id', 'date'], keep='first')
+    
+    df_master = pd.merge(df_master, df_coords, on='stack_id', how='left')
+
+
     df_weather_raw['date'] = pd.to_datetime(df_weather_raw['date']).dt.normalize()
     df_weather_raw = df_weather_raw.groupby('date').agg({
         't': 'mean', 'wind_dir': 'mean', 'v_avg': 'mean', 'humidity': 'mean'
     }).reset_index()
     df_master = df_master.merge(df_weather_raw, on='date', how='left')
 
-    # Препроцессинг температуры
     df_temp_raw['date'] = pd.to_datetime(df_temp_raw['Дата акта']).dt.normalize()
     df_temp_raw = df_temp_raw.rename(columns={'Штабель': 'stack_id', 'Максимальная температура': 'temp_measured'})
     df_temp_raw = df_temp_raw[['stack_id', 'date', 'temp_measured']].drop_duplicates(subset=['stack_id', 'date'], keep='first')
     
     df_master = df_master.merge(df_temp_raw, on=['stack_id', 'date'], how='left')
     
-    # Инженерия признаков температуры
     df_master['temp_measured'] = df_master.groupby('stack_id')['temp_measured'].ffill()
     df_master['temp_measured'] = df_master['temp_measured'].fillna(df_master['t'])
 
     df_master['temp_lag_1d'] = df_master.groupby('stack_id')['temp_measured'].shift(1)
-    df_master['temp_ror'] = df_master['temp_measured'] - df_master['temp_lag_1d'] # RoR (Rate of Rise)
+    df_master['temp_ror'] = df_master['temp_measured'] - df_master['temp_lag_1d']
     df_master['temp_ror'] = df_master['temp_ror'].fillna(0)
     
     df_master = df_master.dropna(subset=['t']).reset_index(drop=True)
@@ -84,8 +110,8 @@ def load_data_from_files(df_weather_raw, df_supplies_raw, df_temp_raw):
     df_master['avg_temp_7d'] = df_master.groupby('stack_id')['temp_measured'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
     df_master['avg_ror_7d'] = df_master.groupby('stack_id')['temp_ror'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
     
-    X = df_master.drop(columns=['date', 'stack_id', 'temp_lag_1d'])
-
+    X = df_master.drop(columns=['date', 'stack_id', 'temp_lag_1d', 'coord_x', 'coord_y'])
+    
     return df_master, X
 
 # Настройка FastAPI
@@ -98,7 +124,10 @@ app = FastAPI(
 model = CatBoostClassifier()
 
 origins = [
-    "http://localhost:5174",
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
 ]
 
 app.add_middleware(
@@ -119,7 +148,7 @@ try:
 except Exception as e:
     raise RuntimeError(f"Ошибка загрузки CatBoost: {e}")
 
-# --- API Endpoints ---
+# Энды
 
 @app.get("/")
 def read_root():
@@ -189,21 +218,8 @@ async def get_stack_details(stack_id: int, date_str: str):
         # Извлекаем данные
         data = result.iloc[0]
         
-        # Определяем статус
-        probability = data['probability']
-        status = "В зоне высокого риска" if probability > 0.40 else "Норма"
-        
-        # Формируем ответ согласно требованиям пользователя
-        card_data = {
-            "Номер штабеля": int(data['stack_id']),
-            "Статус": status,
-            "Возраст угля (дней)": int(data['coal_age_days']),
-            "Тип угля": data['coal_type'],
-            "Вероятность риска (%)": f"{probability * 100:.2f}%",
-            "Дата риска": date_str,
-            "Скорость нагрева (RoR, °C/день)": f"{data['temp_ror']:.2f}",
-            "Макс. температура (°C)": f"{data['temp_measured']:.2f}"
-        }
+        # Используем функцию format_card_data для формирования ответа
+        card_data = format_card_data(data)
         
         return card_data
         
@@ -215,7 +231,7 @@ async def get_stack_details(stack_id: int, date_str: str):
 @app.get("/list_all_cards", response_model=List[Dict[str, Any]])
 async def list_all_cards():
     """
-    ВОЗВРАЩАЕТ СПИСОК УНИКАЛЬНЫХ ШТАБЕЛЕЙ с агрегированными данными о максимальном риске.
+    ВОЗВРАЩАЕТ СПИСОК УНИКАЛЬНЫХ ШТАБЕЛЕЙ с агрегированными данными, включая X и Y.
     """
     if 'last_predictions' not in PREDICTIONS_CACHE:
         raise HTTPException(status_code=400, detail="Сначала выполните прогноз через /predict_data.")
@@ -225,33 +241,35 @@ async def list_all_cards():
     if df.empty:
         return []
 
-    # 1. Рассчитываем общее количество дней в риске для каждого штабеля
     df['is_risk'] = (df['probability'] > 0.40).astype(int)
     risk_summary = df.groupby('stack_id').agg(
         total_risk_days=('is_risk', 'sum'),
+        total_days=('date', 'size') 
     ).reset_index()
     
-    # 2. Находим индекс строки с максимальной вероятностью для каждого штабеля
     idx_max_prob = df.groupby('stack_id')['probability'].idxmax()
     df_max_risk = df.loc[idx_max_prob].reset_index(drop=True)
     
-    # 3. Объединяем агрегированные данные (количество дней в риске)
     df_final = pd.merge(df_max_risk, risk_summary, on='stack_id', how='left')
 
-    # 4. Форматируем результат для фронтенда (КЛЮЧЕВЫЕ ИЗМЕНЕНИЯ ЗДЕСЬ)
     card_list = []
     for index, row in df_final.iterrows():
         probability = row['probability']
         status = "В зоне высокого риска" if probability > 0.40 else "Норма"
         
+        # <-- ИСПРАВЛЕННЫЙ БЛОК: Удален невидимый символ после coord_y
         card_list.append({
             "Номер штабеля": int(row['stack_id']),
             "Тип угля": row['coal_type'],
             "Текущий статус (Макс. риск)": status,
             "Макс. вероятность риска (%)": f"{probability * 100:.2f}%",
+            "Макс. вероятность риска (RAW)": float(probability), 
             "Дата самого высокого риска": row['date'].strftime('%Y-%m-%d'),
             "Общее количество дней в зоне риска": int(row['total_risk_days']),
-            "Макс. температура (на дату макс. риска)": f"{row['temp_measured']:.2f}°C"
+            "Общее количество дней существования": int(row['total_days']), 
+            "Макс. температура (на дату макс. риска)": f"{row['temp_measured']:.2f}°C",
+            "Координата X": float(row['coord_x']), 
+            "Координата Y": float(row['coord_y']) 
         })
         
     return card_list
@@ -273,7 +291,7 @@ async def calculate_metrics(fires_file: UploadFile = File(..., alias="fires_actu
         
         df_predictions['target_fire'] = 0
         
-        # Определение истинных положительных периодов (3 дня до пожара)
+        # (3 дня до пожара)
         for _, row in df_fires_actual.iterrows():
             stack = row['Штабель']
             f_date = row['fire_date']
@@ -304,7 +322,6 @@ async def calculate_metrics(fires_file: UploadFile = File(..., alias="fires_actu
         
         return metrics
     
-
 
     except Exception as e:
         import traceback

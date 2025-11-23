@@ -82,7 +82,6 @@ def load_and_process_data(data_folder="data"):
     
     df_master = df_master.drop(columns=['temp_lag_1d'])
     
-    print(f"🔥 Готово! Размер итогового датасета: {df_master.shape}")
     return df_master
 
 if __name__ == "__main__":
