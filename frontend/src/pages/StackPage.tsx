@@ -5,56 +5,70 @@ import './StackPage.scss';
 
 const StackPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
-    const [stackData, setStackData] = useState<FireData | null>(null);
+    const [stack, setStack] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
-    const getStatus = (prob: number): FireData['status'] => {
-        if (prob >= 0.75) return "Высокий риск";
-        if (prob > 0.5) return "Средний риск";
-        return "Низкий риск";
-    };
-
     useEffect(() => {
-        fetch('http://127.0.0.1:8000/predict_data')
+        fetch("http://localhost:8000/list_all_cards")
             .then(res => res.json())
-            .then((data: any[]) => {
-                const stack = data.find(item => String(item.stack_id) === id);
-                if (stack) {
-                    setStackData({
-                        stack_id: String(stack.stack_id),
-                        date_str: String(stack.date_str),
-                        probability: Number(stack.probability),
-                        status: getStatus(Number(stack.probability))
-                    });
-                } else setStackData(null);
+            .then((data) => {
+                const found = data.find(
+                    (item: any) => String(item["Номер штабеля"]) === id
+                );
+                setStack(found || null);
             })
-            .catch(err => console.error('Ошибка загрузки данных:', err))
             .finally(() => setLoading(false));
     }, [id]);
 
     if (loading) return <p>Загрузка...</p>;
-    if (!stackData) return (
-        <div className="stack-page">
-            <Link to="/" className="back-link">← Вернуться на главную</Link>
-            <p>Такого штабеля не существует</p>
-        </div>
-    );
+    if (!stack) return <p>Штабель не найден</p>;
 
     return (
         <div className="stack-page">
-            <Link to="/" className="back-link">← Вернуться на главную</Link>
-            <h1>{stackData.stack_id}</h1>
-            <p>
-                Статус:
+            <Link to="/" className="back-link">← Назад</Link>
+
+            <h1>Штабель {stack["Номер штабеля"]}</h1>
+
+            <div className="stack-info-card">
+                <div className="info-row">
+                    <span className="info-title">Тип угля:</span>
+                    <span className="info-value">{stack["Тип угля"]}</span>
+                </div>
+
+                <div className="info-row">
+                    <span className="info-title">Статус:</span>
+                    <span className="info-value status">
                 <span
-                    className={`status-dot ${stackData.status.replace(/\s+/g, '-').toLowerCase()}`}
-                    title={stackData.status}
-                ></span>
-                {stackData.status}
-            </p>
-            <p>Вероятность возгорания: {stackData.probability}</p>
-            <p>Дата прогноза: {stackData.date_str}</p>
+                    className={`status-dot ${
+                        stack["Текущий статус (Макс. риск)"].toLowerCase()
+                    }`}
+                />
+                        {stack["Текущий статус (Макс. риск)"]}
+            </span>
+                </div>
+
+                <div className="info-row">
+                    <span className="info-title">Макс. риск:</span>
+                    <span className="info-value">{stack["Макс. вероятность риска (%)"]}</span>
+                </div>
+
+                <div className="info-row">
+                    <span className="info-title">Дата максимального риска:</span>
+                    <span className="info-value">{stack["Дата самого высокого риска"]}</span>
+                </div>
+
+                <div className="info-row">
+                    <span className="info-title">Дней в риске:</span>
+                    <span className="info-value">{stack["Общее количество дней в зоне риска"]}</span>
+                </div>
+
+                <div className="info-row">
+                    <span className="info-title">Макс. температура:</span>
+                    <span className="info-value">{stack["Макс. температура (на дату макс. риска)"]}</span>
+                </div>
+            </div>
         </div>
+
     );
 };
 

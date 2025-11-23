@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react';
+import "./Sidebar.scss"
+import { Link } from "react-router-dom";
+import Calendar from "../calendar/Calendar";
 
 interface StackData {
-    id: number;
-    name: string;
+    "Номер штабеля": number;
+    "Тип угля": string;
+    "Текущий статус (Макс. риск)": string;
+    "Макс. вероятность риска (%)": string;
+    "Дата самого высокого риска": string;
+    "Общее количество дней в зоне риска": number;
+    "Макс. температура (на дату макс. риска)": string;
 }
 
 export const Sidebar = () => {
@@ -11,15 +19,12 @@ export const Sidebar = () => {
 
     const fetchStacks = async () => {
         try {
-            const res = await fetch('http://localhost:8000/predict_data', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    startDate: "2025-11-23",
-                    endDate: "2025-11-30",
-                    stackIds: [1, 2, 3]
-                }),
-            });
+            const res = await fetch('http://localhost:8000/list_all_cards');
+
+            if (res.status === 400) {
+                setStacks([]);
+                return;
+            }
 
             if (!res.ok) {
                 throw new Error(`Ошибка ${res.status}`);
@@ -28,9 +33,10 @@ export const Sidebar = () => {
             const data = await res.json();
             setStacks(data);
             setError(null);
+
         } catch (err: any) {
-            console.error('Ошибка загрузки данных:', err);
-            setError(err.message || 'Неизвестная ошибка');
+            console.error("Ошибка загрузки:", err);
+            setError(null);
         }
     };
 
@@ -38,21 +44,28 @@ export const Sidebar = () => {
         fetchStacks();
     }, []);
 
-    if (error) {
-        return <div className="sidebar-error">Ошибка: {error}</div>;
-    }
-
     return (
         <div className="sidebar">
-            {stacks.length === 0 ? (
-                <p>Данные не загружены</p>
-            ) : (
-                stacks.map(stack => (
-                    <div key={stack.id} className="stack-item">
-                        {stack.name}
-                    </div>
-                ))
-            )}
+
+            <Link to="/predict">
+                <button className="upload-btn">Загрузить файлы</button>
+            </Link>
+
+            <div className="stacks">
+                {stacks.map((stack) => (
+                    <Link
+                        to={`/stack/${stack["Номер штабеля"]}`}
+                        key={stack["Номер штабеля"]}
+                        className="stack-item"
+                    >
+                        Штабель {stack["Номер штабеля"]}
+                    </Link>
+                ))}
+            </div>
+
+            <div className="calendar-section">
+                <Calendar/>
+            </div>
         </div>
     );
 };

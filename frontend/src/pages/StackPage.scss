@@ -6,6 +6,148 @@
   color: white;
   box-sizing: border-box;
 
+  .file-input-block {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .file-label {
+    font-size: 16px;
+    margin-bottom: 12px;
+    color: #dcdcee;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .file-input {
+    padding: 20px 14px;
+    background: #2e2e42;
+    border: none;
+    border-radius: 12px;
+    color: white;
+    cursor: pointer;
+    transition: 0.2s;
+
+    &:hover {
+      background: #3a3a56;
+    }
+
+    &::file-selector-button {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 10px;
+      background: #505073;
+      color: white;
+      margin-right: 12px;
+      cursor: pointer;
+      transition: 0.2s;
+
+      &:hover {
+        background: #5d5d85;
+      }
+    }
+  }
+
+  .submit-btn {
+    padding: 12px 20px;
+    width: 160px;
+    background: #3e3e55;
+    border: none;
+    border-radius: 20px;
+    color: white;
+    cursor: pointer;
+    transition: 0.2s;
+    font-size: 16px;
+    font-weight: 500;
+
+    &:hover {
+      background: #505073;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+  }
+
+  .error-msg {
+    margin-top: 15px;
+    color: #ff7070;
+    font-weight: 500;
+  }
+
+  .result-block {
+    margin-top: 30px;
+  }
+
+  .result-json {
+    margin-top: 10px;
+    padding: 15px;
+    background: #2e2e42;
+    border-radius: 16px;
+    max-height: 400px;
+    overflow: auto;
+    font-size: 14px;
+    color: #e3e3f1;
+  }
+
+  .stack-info-card {
+    border-radius: 24px;
+    max-width: 600px;
+    margin-top: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #1f1f2d;
+    padding: 14px 18px;
+    border-radius: 14px;
+    font-size: 16px;
+  }
+
+  .info-title {
+    color: #9a9ab5;
+    font-weight: 500;
+  }
+
+  .info-value {
+    color: white;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+
+    &.низкий-риск {
+      background-color: #57e857;
+    }
+
+    &.средний-риск {
+      background-color: #f8c459;
+    }
+
+    &.высокий-риск {
+      background-color: #f15151;
+    }
+  }
+
   .back-link {
     display: inline-block;
     margin-bottom: 20px;
@@ -53,59 +195,6 @@
     }
 
     .status-text {
-      font-weight: bold;
-    }
-  }
-
-  .stack-table {
-    width: 60%;
-    min-width: 400px;
-    border-collapse: separate;
-    border-spacing: 0;
-    font-size: 16px;
-    table-layout: fixed;
-
-    th, td {
-      border: none;
-      padding: 18px 16px;
-      text-align: left;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      border-radius: 24px;
-      margin: 2px;
-    }
-
-    th {
-      font-size: 18px;
-    }
-
-    th:first-child,
-    td:first-child {
-      width: 66.666%;
-    }
-
-    th:last-child,
-    td:last-child {
-      width: 33.333%;
-    }
-
-    tr:hover {
-      background: #2e2e4c;
-    }
-
-    .risk-low {
-      color: green;
-      font-weight: bold;
-    }
-
-    .risk-medium {
-      color: orange;
-      font-weight: bold;
-    }
-
-    .risk-high {
-      color: red;
       font-weight: bold;
     }
   }

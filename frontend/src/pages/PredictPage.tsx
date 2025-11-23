@@ -1,4 +1,6 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import {Link} from "react-router-dom";
+import "./StackPage.scss"
 
 export const PredictPage = () => {
     const [weatherFile, setWeatherFile] = useState<File | null>(null);
@@ -44,56 +46,70 @@ export const PredictPage = () => {
     };
 
     return (
-        <div style={{ padding: 20 }}>
+        <div className="stack-page">
+            <Link to="/" className="back-link">← Назад</Link>
+
             <h1>Прогноз самовозгорания угля</h1>
 
-            <div>
-                <label>
-                    Weather Data (CSV):
+            <div className="file-input-block">
+                <label className="file-label">
+                    Weather Data (CSV)
                     <input
                         type="file"
+                        className="file-input"
                         accept=".csv"
                         onChange={(e) => setWeatherFile(e.target.files?.[0] || null)}
                     />
                 </label>
             </div>
 
-            <div>
-                <label>
-                    Supplies Data (CSV):
+            <div className="file-input-block">
+                <label className="file-label">
+                    Supplies Data (CSV)
                     <input
                         type="file"
+                        className="file-input"
                         accept=".csv"
                         onChange={(e) => setSuppliesFile(e.target.files?.[0] || null)}
                     />
                 </label>
             </div>
 
-            <div>
-                <label>
-                    Temperature Data (CSV):
+            <div className="file-input-block">
+                <label className="file-label">
+                    Temperature Data (CSV)
                     <input
                         type="file"
+                        className="file-input"
                         accept=".csv"
                         onChange={(e) => setTemperatureFile(e.target.files?.[0] || null)}
                     />
                 </label>
             </div>
 
-            <button onClick={handleSubmit} disabled={loading} style={{ marginTop: 10 }}>
+            <button
+                onClick={handleSubmit}
+                disabled={loading}
+                className="submit-btn"
+            >
                 {loading ? "Загрузка..." : "Отправить"}
             </button>
 
-            {error && <div style={{ color: "red", marginTop: 10 }}>Ошибка: {error}</div>}
+            {error && (
+                <div className="error-msg">
+                    Ошибка: {error}
+                </div>
+            )}
 
             {result && (
-                <div style={{ marginTop: 20 }}>
+                <div className="result-block">
                     <h2>Результат:</h2>
-                    <pre style={{ maxHeight: 400, overflow: "auto" }}>
-            {JSON.stringify(result, null, 2)}
-          </pre>
+                    <pre className="result-json">
+                {JSON.stringify(result, null, 2)}
+            </pre>
                 </div>
             )}
         </div>
+
     );
 };
