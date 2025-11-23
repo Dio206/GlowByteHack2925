@@ -2,6 +2,7 @@ import pandas as pd
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from catboost import CatBoostClassifier
 from sklearn.metrics import classification_report, roc_auc_score
+from fastapi.middleware.cors import CORSMiddleware
 import os
 import io
 from datetime import datetime
@@ -63,6 +64,16 @@ app = FastAPI(
     title="Coal Fire Predictor API",
     description="API для прогнозирования самовозгорания угля.",
     version="1.0"
+)
+
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 model = CatBoostClassifier()
