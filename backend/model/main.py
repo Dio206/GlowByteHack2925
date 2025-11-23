@@ -15,6 +15,24 @@ model_path = os.path.join(script_dir, "catboost_model.cbm")
 
 PREDICTIONS_CACHE = {} 
 
+def format_card_data(row: pd.Series) -> Dict[str, Any]:
+    """Форматирует строку данных Pandas в словарь с нужными полями и статусом."""
+    probability = row['probability']
+    status = "В зоне высокого риска" if probability > 0.40 else "Норма"
+    
+    return {
+        # Ключевые поля
+        "Номер штабеля": int(row['stack_id']),
+        "Дата риска": row['date'].strftime('%Y-%m-%d'),
+        "Статус": status,
+        # Детальные поля
+        "Возраст угля (дней)": int(row['coal_age_days']),
+        "Тип угля": row['coal_type'],
+        "Вероятность риска (%)": f"{probability * 100:.2f}%",
+        "Скорость нагрева (RoR, °C/день)": f"{row['temp_ror']:.2f}",
+        "Макс. температура (°C)": f"{row['temp_measured']:.2f}"
+    }
+
 def load_data_from_files(df_weather_raw, df_supplies_raw, df_temp_raw):
     # Препроцессинг поставок
     df_supplies_raw['Start_Date'] = pd.to_datetime(df_supplies_raw['ВыгрузкаНаСклад']).dt.normalize()
@@ -144,6 +162,74 @@ async def predict_full_dataset(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Ошибка обработки или прогнозирования: {e}")
+    
+@app.get("/stack_details/{stack_id}/{date_str}", response_model=Dict[str, Any])
+async def get_stack_details(stack_id: int, date_str: str):
+    """
+    Возвращает детальную информацию для карточки штабеля по ID и дате.
+    """
+    if 'last_predictions' not in PREDICTIONS_CACHE:
+        raise HTTPException(status_code=400, detail="Сначала выполните прогноз через /predict_data.")
+    
+    df = PREDICTIONS_CACHE['last_predictions']
+    
+    try:
+        # Конвертация типов для поиска
+        date_dt = pd.to_datetime(date_str).normalize()
+        
+        # Фильтрация по номеру штабеля и дате
+        result = df[
+            (df['stack_id'] == stack_id) & 
+            (df['date'] == date_dt)
+        ]
+        
+        if result.empty:
+            raise HTTPException(status_code=404, detail=f"Данные для штабеля {stack_id} на дату {date_str} не найдены.")
+            
+        # Извлекаем данные
+        data = result.iloc[0]
+        
+        # Определяем статус
+        probability = data['probability']
+        status = "В зоне высокого риска" if probability > 0.40 else "Норма"
+        
+        # Формируем ответ согласно требованиям пользователя
+        card_data = {
+            "Номер штабеля": int(data['stack_id']),
+            "Статус": status,
+            "Возраст угля (дней)": int(data['coal_age_days']),
+            "Тип угля": data['coal_type'],
+            "Вероятность риска (%)": f"{probability * 100:.2f}%",
+            "Дата риска": date_str,
+            "Скорость нагрева (RoR, °C/день)": f"{data['temp_ror']:.2f}",
+            "Макс. температура (°C)": f"{data['temp_measured']:.2f}"
+        }
+        
+        return card_data
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Ошибка получения деталей штабеля: {e}")
+    
+@app.get("/list_all_cards", response_model=List[Dict[str, Any]])
+async def list_all_cards():
+    """
+    ВОЗВРАЩАЕТ ПОЛНЫЙ СПИСОК ВСЕХ ШТАБЕЛЕЙ-ДНЕЙ с детализацией
+    для отображения в виде карточек (без фильтрации по риску).
+    """
+    if 'last_predictions' not in PREDICTIONS_CACHE:
+        raise HTTPException(status_code=400, detail="Сначала выполните прогноз через /predict_data.")
+
+    df_predictions = PREDICTIONS_CACHE['last_predictions'].copy()
+    
+    if df_predictions.empty:
+        return []
+
+    # Форматирование данных для каждой карточки
+    card_list = df_predictions.apply(format_card_data, axis=1).tolist()
+    
+    return card_list
 
 @app.post("/calculate_metrics", response_model=Dict[str, Any])
 async def calculate_metrics(fires_file: UploadFile = File(..., alias="fires_actual_data")):
@@ -192,6 +278,8 @@ async def calculate_metrics(fires_file: UploadFile = File(..., alias="fires_actu
         }
         
         return metrics
+    
+
 
     except Exception as e:
         import traceback
