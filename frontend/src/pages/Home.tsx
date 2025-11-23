@@ -31,11 +31,11 @@ export const Home = () => {
         fetchData();
     }, []);
 
-    if (error) return <div className="home-error">Ошибка: {error}</div>;
+    if (error) return <div>Ошибка: {error}</div>;
     if (!prediction) return <p>Загрузка данных...</p>;
 
     return (
-        <div className="home">
+        <div>
             <pre>{JSON.stringify(prediction, null, 2)}</pre>
         </div>
     );
