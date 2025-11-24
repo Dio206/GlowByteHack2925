@@ -14,6 +14,9 @@ model_path = os.path.join(script_dir, "catboost_model.cbm")
 
 PREDICTIONS_CACHE = {} 
 
+# =========================================================================================
+# Вспомогательные функции
+# =========================================================================================
 
 def format_card_data(row: pd.Series) -> Dict[str, Any]:
     probability = row['probability']
@@ -150,8 +153,11 @@ app = FastAPI(
 model = CatBoostClassifier()
 
 origins = [
-    "http://localhost:5173",
+    "http://localhost:5174",
     "http://localhost:8000",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:8000",
+    "http://localhost:5173",
 ]
 
 app.add_middleware(

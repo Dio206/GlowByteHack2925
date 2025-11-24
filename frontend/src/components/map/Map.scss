@@ -11,20 +11,17 @@
     display: block;
   }
 
-    .map-point {
-      position: absolute;
-      width: 16px;
-      height: 16px;
-      background: #2f7d2f;
-      border: 2px solid white;
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      cursor: pointer;
-      transition: 0.2s;
+  .map-point {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 1px solid white;
+    transition: transform 0.2s;
 
-      &:hover {
-        transform: translate(-50%, -50%) scale(1.4);
-        background: #4CAF50;
-      }
+    &:hover {
+      transform: scale(1.5);
     }
+  }
 }

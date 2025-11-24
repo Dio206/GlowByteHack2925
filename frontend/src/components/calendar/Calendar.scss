@@ -73,16 +73,10 @@
     background: #505070;
   }
 
-  .event-green {
-    background: #2f7d2f !important;
-  }
-
-  .event-red {
+  .event-risk {
     background: #8a2a2a !important;
-  }
-
-  .event-yellow {
-    background: #b59b2a !important;
+    color: white;
+    font-weight: bold;
   }
 
   .empty {
