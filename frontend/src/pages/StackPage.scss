@@ -116,6 +116,13 @@
     overflow: auto;
     font-size: 14px;
     color: #e3e3f1;
+    -ms-overflow-style: none;
+
+    &::-webkit-scrollbar {
+      width: 0;
+      background: transparent;
+    }
+
   }
 
   .stack-info-card {
